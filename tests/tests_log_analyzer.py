@@ -40,10 +40,3 @@ class TestLogAnylyzer(unittest.TestCase):
         with patch('loganalyzer.log_analyzer.listdir',
                    return_value=filesnames):
             self.assertIsNone(la.get_latest_logfile('./test_directory'))
-
-    def test_parse_logfile(self):
-        # TODO: change to str
-        filestat = la.Filestat('tests/logdir/nginx-access-ui.log-20170630.gz',
-                               '20170630', 'gzip')
-        loganalys = la.LogAnalys(filestat)
-        loganalys.parse(fails=10)
