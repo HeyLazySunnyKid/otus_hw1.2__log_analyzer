@@ -13,6 +13,7 @@ class TestLogAnylyzer(unittest.TestCase):
             'apache-access-ui.log-20190631.gz'
         ]
 
+
     def test_get_latets_logfile_gzip(self):
         with patch('loganalyzer.log_analyzer.listdir',
                    return_value=self.general_filenames):
@@ -37,5 +38,5 @@ class TestLogAnylyzer(unittest.TestCase):
             'postgresql-access-ui.log-20190631'
         ]
         with patch('loganalyzer.log_analyzer.listdir',
-                    return_value=[]):
+                   return_value=filesnames):
             self.assertIsNone(la.get_latest_logfile('./test_directory'))
