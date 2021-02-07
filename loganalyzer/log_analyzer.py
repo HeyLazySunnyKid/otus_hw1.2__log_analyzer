@@ -1,5 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+File: log_analyzer.py
+Author: HeyLazySunnyKid
+Email: denis.kaluzhnyy@gmail.com
+Github: https://github.com/HeyLazySunnyKid/otus_hw1.2__log_analyzer
+Description: Otus homework. Script for analyze logs.
+"""
+
 
 # log_format ui_short '$remote_addr  $remote_user $http_x_real_ip [$time_local] "$request" '
 #                     '$status $body_bytes_sent "$http_referer" '
