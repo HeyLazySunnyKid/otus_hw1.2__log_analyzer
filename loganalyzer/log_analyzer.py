@@ -16,12 +16,13 @@ from statistics import median
 from os import listdir
 from os.path import isfile, join
 from typing import List, Dict, Optional, Tuple, NamedTuple, Union
+from operator import attrgetter
 
 
 Logstat = Dict[str, List[str]]
 class Lograw(NamedTuple):
     url: str           # Url запроса
-    count_abs: int     # сколько раз встречается URL, абсолютное значение
+    count: int         # сколько раз встречается URL, абсолютное значение
     count_perc: float  # сколько раз встречается URL, в процентнах относительно общего числа запросов
     time_avg: float    # средний $request_time для данного URL'а
     time_max: float    # максимальный $request_time для данного URL'а
@@ -36,7 +37,8 @@ class Filestat(NamedTuple):
 
 
 config = {
-    "REPORT_SIZE": 1000,
+    #  "REPORT_SIZE": 1000,
+    "REPORT_SIZE": 5, # debug
     "REPORT_DIR": "./reports",
     "LOG_DIR": "./log",
     "FAILS_PERSENT": 10
@@ -150,14 +152,25 @@ class LogAnalys():
             time_perc = time_sum / self.__sumrtime * 100
             raw = Lograw(url, count_abs, count_perc, time_avg, time_max, 
                          time_med, time_perc, time_sum)
-            self.__analys.append(Lograw)
+            self.__analys.append(raw)
 
     def report(self) -> Lograw:
         for lograw in self.__analys:
             yield lograw
 
 
-def view(logs: Lograw):
+def put_report(analys: LogAnalys, report_dir: str, report_size: int):
+    #  for raw in analys.report():
+    #      pass
+        #  print(raw)
+    report = sorted(analys.report(), key=attrgetter('time_sum'),
+                    reverse=True)[:report_size]
+    table = [dict(raw._asdict()) for raw in report]
+
+    data = analys.logfile.data
+    report_filename = ('report-{y}.{m}.{d}.html'
+                       .format(y=data[0:4], m=data[4:6], d=data[6:8]))
+    report_file = join(report_dir, report_filename)
     pass
 
 def load_config(configfile: Optional[str] = None) -> Dict[str, Union[str, int]]:
@@ -171,6 +184,11 @@ def load_config(configfile: Optional[str] = None) -> Dict[str, Union[str, int]]:
 
 
 def main() -> None:
+    filestat = Filestat('tests/logdir/nginx-access-ui.log-20170630.gz',
+                           '20170630', 'gzip')
+    loganalys = LogAnalys(filestat)
+    loganalys.parse(fails=10)
+    put_report(loganalys, config['REPORT_DIR'], config['REPORT_SIZE'])
     pass
 
 
