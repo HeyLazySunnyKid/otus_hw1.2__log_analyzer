@@ -14,6 +14,7 @@ Description: Otus homework. Script for analyze logs.
 #                     '"$http_user_agent" "$http_x_forwarded_for" "$http_X_REQUEST_ID" "$http_X_RB_USER" '
 #                     '$request_time';
 
+import argparse
 import gzip
 import json
 import logging
@@ -231,11 +232,11 @@ def load_config(config: Dict[str, Union[str, int]]) -> Dict[str, Union[str, int]
     :returns: Actual configuration
 
     """
-    if len(sys.argv) == 3 and sys.argv[1] in ['-c', '--config']:
-        config_path = sys.argv[2]
-    else:
-        config_path = 'config.yaml'
-
+    # TODO: argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', help='config file path')
+    args = parser.parse_args()
+    config_path = 'config.yaml' if args.config is None else args.config
     with open(config_path, 'r') as file:
         file_config = yaml.load(file, Loader=yaml.FullLoader)
     config.update(file_config)
