@@ -21,6 +21,7 @@ import logging
 import os
 import re
 import sys
+import datetime
 from operator import attrgetter
 from statistics import median
 from string import Template
@@ -46,7 +47,7 @@ class ReportRaw(NamedTuple):
 class FileStat(NamedTuple):
     """ Stat about file """
     path: str
-    date: str
+    date: datetime.datetime
     extention: str
 
 
@@ -72,7 +73,7 @@ def get_latest_logfile(logdir: str) -> Optional[FileStat]:
         if match is None:
             continue
 
-        date = match.group(1)
+        date = datetime.datetime.strptime(match.group(1), '%Y%m%d')
         if match.group(2) in ['', 'log', 'txt']:
             extention = 'plain'
         elif match.group(2) in ['gz', 'gzip']:
@@ -187,8 +188,7 @@ def get_report_file(logfile: FileStat, report_dir: str) -> Optional[str]:
 
     """
     date = logfile.date
-    report_filename = ('report-{y}.{m}.{d}.html'
-                       .format(y=date[0:4], m=date[4:6], d=date[6:8]))
+    report_filename = date.strftime('report-%Y.%m.%d.html')
     report_file = os.path.join(report_dir, report_filename)
     if os.path.exists(report_file) and os.path.isfile(report_file):
         logging.info('Report {} already exist'.format(report_file))
