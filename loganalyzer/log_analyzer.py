@@ -25,11 +25,18 @@ import datetime
 from operator import attrgetter
 from statistics import median
 from string import Template
-from typing import Dict, List, NamedTuple, Optional, Union, Generator
+from typing import Iterable, Dict, Tuple, List, NamedTuple, Optional, Union, Generator
 
 import yaml
 
 LogsData = Dict[str, List[float]]
+
+
+class ParseStat(NamedTuple):
+    """ File parse lines statistic """
+    count: int
+    success: int
+    fail: int
 
 
 class ReportRaw(NamedTuple):
@@ -86,97 +93,89 @@ def get_latest_logfile(logdir: str) -> Optional[FileStat]:
     return last
 
 
-class LogAnalys():
-    """ Log analysis """
+def parse_url_request_time(logfile: FileStat) -> Tuple[LogsData, ParseStat]:
+    """Parse logfile and return url with list of request_time
 
-    def __init__(self, logfile: FileStat):
-        self.logfile = logfile
-        self.__lognumber = -1
-        self.__analisis: List[ReportRaw] = []
-        self.__sumrtime = -1
+    :logfile: Information about log's file
+    :returns: Parsed logs data - url and list of request_time
+                Parse statistic - number of failes and successes
+    """
+    re_logformat = r'\s+'.join([
+        r'\S+',                 # $remote_addr
+        r'\S+',                 # $remote_user
+        r'\S+',                 # $http_x_real_ip
+        r'\[[^\]]+\]',          # [$time_local]
+        r'"\w+\s+(\S+)[^"]*"',  # "$request", group(1)
+        r'\S+',                 # $status
+        r'\S+',                 # $body_bytes_sent
+        r'"[^"]+"',             # "$http_referer"
+        r'"[^"]+"',             # "$http_user_agent"
+        r'"[^"]+"',             # "$http_x_forwarded_for"
+        r'"[^"]+"',             # "$http_X_REQUEST_ID"
+        r'"[^"]+"',             # "$http_X_RB_USER"
+        r'(\S+)'                # $request_time, group(2)
+    ])
+    logformat = re.compile(re_logformat)
+    openfile = gzip.open if logfile.extention == 'gzip' else open
 
-    def parse(self, failsborder: Optional[int] = 10) -> None:
-        """ Parse logs in logfile and analyze them
+    success = 0
+    fail = 0
+    logstat: LogsData = {}
+    with openfile(logfile.path, 'r') as file:
+        for orig_line in file:
+            line = orig_line.decode('utf-8')
+            result = logformat.match(line)
+            if result is None:
+                fail += 1
+                continue
+            success += 1
+            url, str_rtime = result.group(1, 2)
+            rtime = float(str_rtime)
+            if url in logstat:
+                logstat[url].append(rtime)
+            else:
+                logstat[url] = [rtime]
 
-        :failsborder: maximum persent of fails
+    parsestat = ParseStat(success+fail, success, fail)
+    return logstat, parsestat
 
-        """
-        logstat = self.__parse_logfile(failsborder)
-        self.__analyze_stat(logstat)
 
-    def __parse_logfile(self, failsborder: int) -> LogsData:
-        """Parse logfile and return url and request time info
+def check_fails(parsestat: ParseStat, failsborder: int = 10) -> None:
+    """ Check number of failes
 
-        :failsborder: maximum percent of fails
-        :returns: Parsed logs data - url and list of request_time
+    :parsestat: Parse statistic
 
-        """
-        re_logformat = r'\s+'.join([
-            r'\S+',                 # $remote_addr
-            r'\S+',                 # $remote_user
-            r'\S+',                 # $http_x_real_ip
-            r'\[[^\]]+\]',          # [$time_local]
-            r'"\w+\s+(\S+)[^"]*"',  # "$request", group(1)
-            r'\S+',                 # $status
-            r'\S+',                 # $body_bytes_sent
-            r'"[^"]+"',             # "$http_referer"
-            r'"[^"]+"',             # "$http_user_agent"
-            r'"[^"]+"',             # "$http_x_forwarded_for"
-            r'"[^"]+"',             # "$http_X_REQUEST_ID"
-            r'"[^"]+"',             # "$http_X_RB_USER"
-            r'(\S+)'                # $request_time, group(2)
-        ])
-        logformat = re.compile(re_logformat)
-        openfile = gzip.open if self.logfile.extention == 'gzip' else open
+    """
+    failpersent = (
+        parsestat.fail / parsestat.count * 100 if parsestat.fail > 0 else 0
+    )
+    if failpersent > failsborder:
+        raise RuntimeError('Logs has {}% not parsed lines that more than {}'
+                           .format(failpersent, failsborder))
+    elif failpersent > 0:
+        logging.warning('Logs has {}% not parsed lines'.format(failpersent))
 
-        linecount = 0
-        faillinecount = 0
-        sumrtime = 0.0
-        logstat: LogsData = {}
-        with openfile(self.logfile.path, 'r') as file:
-            for orig_line in file:
-                line = orig_line.decode('utf-8')
-                linecount += 1
-                result = logformat.match(line)
-                if result is None:
-                    faillinecount += 1
-                    continue
-                url, str_rtime = result.group(1, 2)
-                rtime = float(str_rtime)
-                if url in logstat:
-                    logstat[url].append(rtime)
-                else:
-                    logstat[url] = [rtime]
-                sumrtime += rtime
 
-        failpersent = (faillinecount / linecount * 100 if faillinecount > 0
-                       else 0)
-        if failpersent > failsborder:
-            raise RuntimeError('Logs has {}% not parsed lines that more than {}'
-                               .format(failpersent, failsborder))
-        elif failpersent > 0:
-            logging.warning('Logs has {}% not parsed lines'.format(failpersent))
-        self.__lognumber = linecount - faillinecount
-        self.__sumrtime = sumrtime
-        return logstat
+def get_report(logstat: LogsData, parsestat: ParseStat) -> Generator[ReportRaw, None, None]:
+    """ Generator of report raws
 
-    def __analyze_stat(self, logstat: LogsData) -> None:
-        for url, rtimes in logstat.items():
-            count_abs = len(rtimes)
-            count_perc = count_abs / self.__lognumber * 100
-            time_sum = sum(rtimes)
-            time_avg = time_sum / count_abs
-            time_max = max(rtimes)
-            time_med = median(rtimes)
-            time_perc = time_sum / self.__sumrtime * 100
-            raw = ReportRaw(url, count_abs, count_perc, time_avg, time_max,
-                            time_med, time_perc, time_sum)
-            self.__analisis.append(raw)
+    :logstat: Staticstic of url in logs
+    :parsestat: Parse statistic
+    :returns: Raws of analysis report
 
-    def report(self) -> Generator[ReportRaw, None, None]:
-        """ Get parsed analysis """
-        for lograw in self.__analisis:
-            yield lograw
+    """
+    sumrtime = sum((sum(v) for k, v in logstat.items()))
+    for url, rtimes in logstat.items():
+        count_abs = len(rtimes)
+        count_perc = count_abs / parsestat.count * 100
+        time_sum = sum(rtimes)
+        time_avg = time_sum / count_abs
+        time_max = max(rtimes)
+        time_med = median(rtimes)
+        time_perc = time_sum / sumrtime * 100
+        raw = ReportRaw(url, count_abs, count_perc, time_avg, time_max,
+                        time_med, time_perc, time_sum)
+        yield raw
 
 
 def get_report_file(logfile: FileStat, report_dir: str) -> Optional[str]:
@@ -202,7 +201,7 @@ def get_report_file(logfile: FileStat, report_dir: str) -> Optional[str]:
     return report_file
 
 
-def put_report(analys: LogAnalys, report_file: str, report_size: int) -> None:
+def put_report(stat: Iterable[ReportRaw], report_file: str, report_size: int) -> None:
     """ Put report inside report_file
 
     :analys: log analysis
@@ -210,8 +209,7 @@ def put_report(analys: LogAnalys, report_file: str, report_size: int) -> None:
     :report_size: number or report lines
 
     """
-    report = sorted(analys.report(), key=attrgetter('time_sum'),
-                    reverse=True)[:report_size]
+    report = sorted(stat, key=attrgetter('time_sum'), reverse=True)[:report_size]
     table_json = json.dumps([raw._asdict() for raw in report])
 
     template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -255,9 +253,10 @@ def main() -> None:
         report_file = get_report_file(last, config['REPORT_DIR'])
         if report_file is None:
             sys.exit(0)
-        loganalys = LogAnalys(last)
-        loganalys.parse(config['FAILS_PERSENT'])
-        put_report(loganalys, report_file, config['REPORT_SIZE'])
+        urlstat, parsestat = parse_url_request_time(last)
+        check_fails(parsestat)
+        stat = get_report(urlstat, parsestat)
+        put_report(stat, report_file, config['REPORT_SIZE'])
     except Exception as e:
         logging.exception(e)
 
