@@ -240,17 +240,17 @@ def load_config(config: Dict[str, Union[str, int]]) -> Dict[str, Union[str, int]
     with open(config_path, 'r') as file:
         file_config = yaml.load(file, Loader=yaml.FullLoader)
     config.update(file_config)
-    logging.basicConfig(filename=config.get('LOGFILE'),
-                        level=logging.DEBUG,
-                        format='[%(asctime)s] %(levelname).1s %(message)s',
-                        datefmt='%Y.%m.%d %H:%M:%S')
-    logging.info('config successfully loaded')
     return config
 
 
 def main() -> None:
     try:
         config = load_config(global_config)
+        logging.basicConfig(filename=config.get('LOGFILE'),
+                            level=logging.DEBUG,
+                            format='[%(asctime)s] %(levelname).1s %(message)s',
+                            datefmt='%Y.%m.%d %H:%M:%S')
+        logging.info('Initialization completed')
         last = get_latest_logfile(config['LOG_DIR'])
         report_file = get_report_file(last, config['REPORT_DIR'])
         if report_file is None:
