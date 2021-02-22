@@ -245,7 +245,7 @@ def load_config(config: Dict[str, Union[str, int]]) -> Dict[str, Union[str, int]
 
 def main() -> None:
     try:
-        config = load_config(global_config)
+        config = load_config(dict(global_config))
         logging.basicConfig(filename=config.get('LOGFILE'),
                             level=logging.DEBUG,
                             format='[%(asctime)s] %(levelname).1s %(message)s',
