@@ -192,12 +192,6 @@ def get_report_file(logfile: FileStat, report_dir: str) -> Optional[str]:
     if os.path.exists(report_file) and os.path.isfile(report_file):
         logging.info('Report {} already exist'.format(report_file))
         return None
-    elif os.path.exists(report_file):
-        raise RuntimeError('Report destination already exist')
-    elif not os.path.exists(report_dir):
-        logging.warning('Folder {} not exist'.format(report_dir))
-        os.mkdir(report_dir)
-        logging.info('Folder {} successfully created'.format(report_dir))
     return report_file
 
 
